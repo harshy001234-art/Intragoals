@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: intragoals-backend
+    env: docker
+    plan: free
+    dockerfilePath: backend/Dockerfile
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase: false
+      - key: DIRECT_URL
+        fromDatabase: false
+      - key: JWT_ACCESS_SECRET
+        fromDatabase: false
+      - key: JWT_REFRESH_SECRET
+        fromDatabase: false
+    buildCommand: ""
+    startCommand: "node dist/src/server.js"
