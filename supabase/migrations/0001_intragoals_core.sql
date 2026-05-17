@@ -416,7 +416,8 @@ create policy "admins manage integrations" on public.integration_connections
 for all using (organization_id = public.current_org_id() and public.is_admin())
 with check (organization_id = public.current_org_id() and public.is_admin());
 
-create or replace view public.analytics_goal_distribution as
+create or replace view public.analytics_goal_distribution
+with (security_invoker = true) as
 select
   organization_id,
   thrust_area,
@@ -427,7 +428,8 @@ select
 from public.goals
 group by organization_id, thrust_area, uom, status;
 
-create or replace view public.analytics_manager_effectiveness as
+create or replace view public.analytics_manager_effectiveness
+with (security_invoker = true) as
 select
   manager.id as manager_id,
   manager.organization_id,

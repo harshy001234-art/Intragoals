@@ -1,5 +1,5 @@
 {
-  "name": "tanstack_start_ts",
+  "name": "intragoals-frontend",
   "private": true,
   "sideEffects": false,
   "type": "module",
@@ -10,10 +10,6 @@
     "preview": "serve -s dist/client -l 8080",
     "start": "serve -s dist/client -l 8080",
     "build:client": "vite build",
-    "build:backend": "cd backend && npm install --no-audit --no-fund && npm run build && npm run prisma:generate",
-    "build:prod": "npm run build:client && npm run build:backend && node -e \"const fs=require('fs');require('child_process').execSync('rm -rf backend/public || true'); require('child_process').execSync('cp -r dist/client backend/public');\"",
-    "docker:build": "docker build -t intragoals-backend ./backend",
-    "docker:tag": "docker tag intragoals-backend intragoals-backend:latest",
     "deploy:render": "echo 'Use render.yaml with the Render dashboard or CLI to deploy.'",
     "lint": "eslint .",
     "format": "prettier --write ."

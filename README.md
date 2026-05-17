@@ -1,74 +1,86 @@
-# Intragoals — Align. Track. Achieve.
+# Intragoals
 
-Enterprise Goal Setting & Tracking Portal. Frontend built with React + Vite + TanStack Router + Tailwind v4 + shadcn/ui + Recharts + Zustand + Framer Motion.
+Intragoals is an in-house goal setting and tracking portal built with React, TypeScript, Vite, TanStack Router, and Supabase. The repository is organized to read like a production-ready hackathon submission: clear app boundaries, focused domain modules, and lightweight infrastructure code.
 
-## Demo accounts (no login required)
+## Stack
 
-Use the **Demo role switcher** in the topbar, or pick a role from the login page:
+- React 19
+- TypeScript
+- Vite
+- TanStack Start / TanStack Router
+- Supabase
+- Tailwind CSS
+- Zustand
 
-- **Employee** — Aarav Mehta · Senior Software Engineer
-- **Manager** — Priya Iyer · Engineering Manager
-- **Admin / HR** — Rohan Kapoor · Head of HR Operations
+## Project structure
 
-State is persisted in `localStorage` under `intragoals-state`. Clear it to reset seed data.
+```text
+src/
+  app/
+    layouts/
+    providers/
+    routes/
+  intragoals/
+    auth/
+    workspace/
+  components/
+    shared/
+    ui/
+  lib/
+    constants/
+    supabase/
+    utils/
+  styles/
+  types/
 
-## Pages
+supabase/
+  functions/
+  migrations/
+  seed/
 
-Public: `/`, `/features`, `/pricing`, `/contact`, `/privacy`, `/terms`, `/login`, `/register`, `/forgot-password`.
-
-App: `/app/dashboard`, `/app/goals`, `/app/goals/new`, `/app/goals/:id`, `/app/checkins`, `/app/team`, `/app/approvals`, `/app/shared`, `/app/reports`, `/app/notifications`, `/app/audit`, `/app/settings`.
-
-Admin: `/app/admin`, `/app/admin/users`, `/app/admin/departments`, `/app/admin/cycles`, `/app/admin/shared-kpis`, `/app/admin/escalations`.
-
-## Backend
-
-Production backend code now lives in `backend/`. See `backend/README.md` for setup, seed accounts, API routes, and Railway/Render deployment instructions.
-
-## Backend (original frontend notes)
-
-The frontend ships with a typed in-memory store (`src/lib/store.ts`) including the score engine. The production backend should mirror the same shapes and expose REST endpoints under these resources:
-
-- `auth` — JWT with refresh-token rotation, secure HTTP-only cookies, bcrypt hashing
-- `users`, `roles`, `departments`
-- `goals`, `goal_sheets`, `shared_goals`, `goal_assignments`
-- `quarterly_updates`, `approvals`, `checkin_comments`
-- `notifications`, `escalations`, `audit_logs`, `cycles`, `reports`, `sessions`, `settings`
-- `webhooks/n8n` — escalations + email + MS Teams placeholder
-
-Recommended stack:
-- **API**: Node.js + Express + Prisma + PostgreSQL (Supabase)
-- **Auth**: Passport JWT, refresh-token rotation, RBAC middleware
-- **Automation**: n8n Cloud webhooks for escalations, email, and MS Teams
-- **Deployment**: Frontend → Vercel · API → Render or Railway · DB → Supabase
-
-## Score engine (frontend)
-
-```ts
-// Numeric / Percentage
-score = direction === "Max" ? achievement / target : target / achievement;
-
-// Timeline
-score = achievement_pct; // 0-100
-
-// Zero-based
-score = achievement === 0 ? 100 : 0;
-
-// Overall: weightage-weighted average of goal scores
+docs/
+  architecture.md
+  setup.md
+  demo-credentials.md
+  submission.md
 ```
 
-## Validation rules (enforced in `src/routes/app.goals.new.tsx`)
+## Key flows
 
-- Max 8 goals per employee
-- Total weightage = 100% required to submit
-- Min 10% per goal weightage
-- No empty titles, no duplicate titles
-- Approved goals are locked; only Admin can unlock
+- Public marketing and auth routes live in `src/app/routes`.
+- Workspace state, seeded demo data, and Supabase data mapping live in `src/intragoals/workspace`.
+- Authentication logic lives in `src/intragoals/auth`.
+- Shared brand and goal UI primitives live in `src/components/shared`.
 
-## Branding
+## Local development
 
-Logo: `src/assets/intragoals-logo.png`. Brand tokens defined in `src/styles.css` (`--brand-blue`, `--brand-electric`, `--brand-cyan`, `--brand-purple`, `--brand-magenta`, `--brand-orange`, `--brand-yellow`, `--brand-green`).
+```bash
+npm install
+npm run dev
+```
 
-## Scripts
+Useful scripts:
 
-- `bun dev` — start dev server
-- `bun run build` — production build
+- `npm run dev` starts the local app.
+- `npm run build` creates the production build.
+- `npm run lint` runs ESLint.
+- `npm run format` runs Prettier.
+
+## Environment
+
+Create `.env.local` from `.env.example`.
+
+For Supabase-enabled auth and persistence, set:
+
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_PUBLISHABLE_KEY`
+- `VITE_ENABLE_MICROSOFT_AUTH`
+
+`VITE_API_URL` remains optional for legacy backend fallback behavior.
+
+## Documentation
+
+- [Setup guide](docs/setup.md)
+- [Architecture notes](docs/architecture.md)
+- [Demo credentials and judging flow](docs/demo-credentials.md)
+- [Submission checklist](docs/submission.md)
