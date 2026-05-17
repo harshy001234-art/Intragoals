@@ -14,6 +14,7 @@ import {
 import { Plus, Save, Send, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { workspaceApi } from "@/lib/workspace-api";
 
 export const Route = createFileRoute("/app/goals/new")({
   component: NewGoalSheet,
@@ -43,10 +44,12 @@ const blank = (): Draft => ({
 
 function NewGoalSheet() {
   const user = useApp((s) => s.user)!;
+  const authSource = useApp((s) => s.authSource);
   const upsertGoal = useApp((s) => s.upsertGoal);
   const pushAudit = useApp((s) => s.pushAudit);
   const navigate = useNavigate();
   const [items, setItems] = useState<Draft[]>([{ ...blank(), title: "" }]);
+  const [saving, setSaving] = useState<"Draft" | "Pending Approval" | null>(null);
 
   const totalWeight = items.reduce((a, i) => a + (Number(i.weightage) || 0), 0);
 
@@ -71,7 +74,7 @@ function NewGoalSheet() {
     return null;
   };
 
-  const persist = (status: "Draft" | "Pending Approval") => {
+  const persist = async (status: "Draft" | "Pending Approval") => {
     if (status === "Pending Approval") {
       const err = validate();
       if (err) return toast.error(err);
@@ -79,9 +82,19 @@ function NewGoalSheet() {
       // For draft, only require non-empty titles
       if (items.some((i) => !i.title.trim())) return toast.error("Empty goal titles are not allowed.");
     }
-    items.forEach((it) => {
+    setSaving(status);
+    try {
+      for (const it of items) {
+        const auditEntry = {
+          userId: user.id,
+          userName: user.name,
+          action: status === "Draft" ? "Saved goal as draft" : "Submitted goal for approval",
+          entityType: "Goal",
+          entityId: "",
+          newValue: it.title.trim(),
+        };
       const goal: Goal = {
-        id: `g-${Math.random().toString(36).slice(2, 9)}`,
+        id: authSource === "account" && "randomUUID" in crypto ? crypto.randomUUID() : `g-${Math.random().toString(36).slice(2, 9)}`,
         ownerId: user.id,
         title: it.title.trim(),
         description: it.description,
@@ -96,10 +109,19 @@ function NewGoalSheet() {
         quarterly: ["Q1", "Q2", "Q3", "Q4"].map((q) => ({ quarter: q as any, achievement: null, status: "Not Started", comment: "" })),
       };
       upsertGoal(goal);
-      pushAudit({ userId: user.id, userName: user.name, action: status === "Draft" ? "Saved goal as draft" : "Submitted goal for approval", entityType: "Goal", entityId: goal.id, newValue: goal.title });
-    });
-    toast.success(status === "Draft" ? "Saved as draft." : "Submitted for manager approval.");
-    navigate({ to: "/app/goals" });
+        pushAudit({ ...auditEntry, entityId: goal.id });
+        if (authSource === "account") {
+          await workspaceApi.saveGoal(goal);
+          await workspaceApi.createAudit({ ...auditEntry, entityId: goal.id });
+        }
+      }
+      toast.success(status === "Draft" ? "Saved as draft." : "Submitted for manager approval.");
+      navigate({ to: "/app/goals" });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to save goal sheet.");
+    } finally {
+      setSaving(null);
+    }
   };
 
   return (
@@ -110,8 +132,8 @@ function NewGoalSheet() {
           <div className="text-sm text-muted-foreground">FY26 cycle · up to 8 goals · weightages must total 100%</div>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" className="border-border" onClick={() => persist("Draft")}><Save className="mr-1.5 h-4 w-4" /> Save draft</Button>
-          <Button className="bg-brand-gradient text-background hover:opacity-90" onClick={() => persist("Pending Approval")}><Send className="mr-1.5 h-4 w-4" /> Submit for approval</Button>
+          <Button variant="outline" className="border-border" disabled={Boolean(saving)} onClick={() => void persist("Draft")}><Save className="mr-1.5 h-4 w-4" /> {saving === "Draft" ? "Saving..." : "Save draft"}</Button>
+          <Button className="bg-brand-gradient text-background hover:opacity-90" disabled={Boolean(saving)} onClick={() => void persist("Pending Approval")}><Send className="mr-1.5 h-4 w-4" /> {saving === "Pending Approval" ? "Submitting..." : "Submit for approval"}</Button>
         </div>
       </div>
 

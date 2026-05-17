@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useApp, scoreForGoal, userById, TEAM_MEMBERS } from "@/lib/store";
+import { useApp, scoreForGoal, userById } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from "recharts";
 import { Download } from "lucide-react";
@@ -10,8 +10,9 @@ export const Route = createFileRoute("/app/reports")({
 });
 
 function ReportsPage() {
+  const people = useApp((s) => s.people);
   const goals = useApp((s) => s.goals);
-  const data = TEAM_MEMBERS.map((m) => {
+  const data = people.filter((person) => person.role === "employee").map((m) => {
     const mg = goals.filter((g) => g.ownerId === m.id);
     const avg = mg.length ? Math.round(mg.reduce((a, g) => a + scoreForGoal(g), 0) / mg.length) : 0;
     return { name: m.name.split(" ")[0], score: avg, goals: mg.length };

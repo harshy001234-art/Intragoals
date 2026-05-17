@@ -3,6 +3,8 @@ import { useApp } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Bell, CheckCheck } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { toast } from "sonner";
+import { workspaceApi } from "@/lib/workspace-api";
 
 export const Route = createFileRoute("/app/notifications")({
   component: NotificationsPage,
@@ -10,8 +12,18 @@ export const Route = createFileRoute("/app/notifications")({
 
 function NotificationsPage() {
   const user = useApp((s) => s.user);
+  const authSource = useApp((s) => s.authSource);
   const items = useApp((s) => s.notifications).filter((n) => n.userId === user?.id);
   const markRead = useApp((s) => s.markNotificationsRead);
+  const handleMarkRead = () => {
+    markRead();
+    if (authSource === "account" && user) {
+      void workspaceApi
+        .markNotificationsRead(user.id)
+        .then(() => toast.success("Notifications marked read."))
+        .catch((error) => toast.error(error instanceof Error ? error.message : "Unable to sync notifications."));
+    }
+  };
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -19,7 +31,7 @@ function NotificationsPage() {
           <h1 className="text-2xl font-semibold">Notifications</h1>
           <div className="text-sm text-muted-foreground">{items.filter(i => !i.read).length} unread</div>
         </div>
-        <Button variant="outline" className="border-border" onClick={markRead}><CheckCheck className="mr-1.5 h-4 w-4" /> Mark all read</Button>
+        <Button variant="outline" className="border-border" onClick={handleMarkRead}><CheckCheck className="mr-1.5 h-4 w-4" /> Mark all read</Button>
       </div>
       <div className="space-y-2">
         {items.length === 0 && <div className="rounded-2xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">You're all caught up.</div>}

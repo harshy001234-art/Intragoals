@@ -7,6 +7,7 @@ import { StatusBadge } from "@/components/common/Bits";
 import { Check, RotateCcw, X } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
+import { workspaceApi } from "@/lib/workspace-api";
 
 export const Route = createFileRoute("/app/approvals")({
   component: ApprovalsPage,
@@ -14,16 +15,28 @@ export const Route = createFileRoute("/app/approvals")({
 
 function ApprovalsPage() {
   const user = useApp((s) => s.user)!;
+  const authSource = useApp((s) => s.authSource);
   const goals = useApp((s) => s.goals).filter((g) => g.status === "Pending Approval");
   const setStatus = useApp((s) => s.setGoalStatus);
   const upsertGoal = useApp((s) => s.upsertGoal);
   const pushAudit = useApp((s) => s.pushAudit);
   const [comments, setComments] = useState<Record<string, string>>({});
 
-  const act = (id: string, status: "Approved" | "Rejected" | "Returned") => {
+  const act = async (id: string, status: "Approved" | "Rejected" | "Returned") => {
+    const goal = useApp.getState().goals.find((item) => item.id === id);
     setStatus(id, status, comments[id]);
-    pushAudit({ userId: user.id, userName: user.name, action: `${status} goal`, entityType: "Goal", entityId: id, previousValue: "Pending Approval", newValue: status });
-    toast.success(`Goal ${status.toLowerCase()}.`);
+    const auditEntry = { userId: user.id, userName: user.name, action: `${status} goal`, entityType: "Goal", entityId: id, previousValue: "Pending Approval", newValue: status };
+    pushAudit(auditEntry);
+    try {
+      if (authSource === "account") {
+        if (goal) await workspaceApi.saveGoal({ ...goal, status, managerComment: comments[id], updatedAt: new Date().toISOString() });
+        await workspaceApi.setGoalStatus(id, status, comments[id]);
+        await workspaceApi.createAudit(auditEntry);
+      }
+      toast.success(`Goal ${status.toLowerCase()}.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to sync approval.");
+    }
   };
 
   return (
@@ -52,8 +65,16 @@ function ApprovalsPage() {
               </div>
               <div className="mt-4 grid gap-3 md:grid-cols-4">
                 <Field label="UoM" value={g.uom} />
-                <EditableNum label="Target" value={g.target} onChange={(v) => upsertGoal({ ...g, target: v })} />
-                <EditableNum label="Weightage (%)" value={g.weightage} onChange={(v) => upsertGoal({ ...g, weightage: v })} />
+                <EditableNum label="Target" value={g.target} onChange={(v) => {
+                  const next = { ...g, target: v, updatedAt: new Date().toISOString() };
+                  upsertGoal(next);
+                  if (authSource === "account") void workspaceApi.saveGoal(next).catch((error) => toast.error(error instanceof Error ? error.message : "Unable to sync goal."));
+                }} />
+                <EditableNum label="Weightage (%)" value={g.weightage} onChange={(v) => {
+                  const next = { ...g, weightage: v, updatedAt: new Date().toISOString() };
+                  upsertGoal(next);
+                  if (authSource === "account") void workspaceApi.saveGoal(next).catch((error) => toast.error(error instanceof Error ? error.message : "Unable to sync goal."));
+                }} />
                 <Field label="Direction" value={g.direction} />
               </div>
               <div className="mt-3 space-y-1.5">
@@ -61,9 +82,9 @@ function ApprovalsPage() {
                 <Textarea rows={2} value={comments[g.id] ?? ""} onChange={(e) => setComments({ ...comments, [g.id]: e.target.value })} />
               </div>
               <div className="mt-3 flex flex-wrap justify-end gap-2">
-                <Button variant="outline" className="border-border" onClick={() => act(g.id, "Returned")}><RotateCcw className="mr-1.5 h-4 w-4" /> Return for rework</Button>
-                <Button variant="destructive" onClick={() => act(g.id, "Rejected")}><X className="mr-1.5 h-4 w-4" /> Reject</Button>
-                <Button className="bg-brand-gradient text-background hover:opacity-90" onClick={() => act(g.id, "Approved")}><Check className="mr-1.5 h-4 w-4" /> Approve</Button>
+                <Button variant="outline" className="border-border" onClick={() => void act(g.id, "Returned")}><RotateCcw className="mr-1.5 h-4 w-4" /> Return for rework</Button>
+                <Button variant="destructive" onClick={() => void act(g.id, "Rejected")}><X className="mr-1.5 h-4 w-4" /> Reject</Button>
+                <Button className="bg-brand-gradient text-background hover:opacity-90" onClick={() => void act(g.id, "Approved")}><Check className="mr-1.5 h-4 w-4" /> Approve</Button>
               </div>
             </div>
           );

@@ -5,6 +5,8 @@ export type Role = "employee" | "manager" | "admin";
 
 export interface User {
   id: string;
+  organizationId?: string | null;
+  managerId?: string | null;
   name: string;
   email: string;
   role: Role;
@@ -145,6 +147,8 @@ export const TEAM_MEMBERS: User[] = [
     avatarColor: "#ffd43d",
   },
 ];
+
+const DEMO_PEOPLE: User[] = [...TEAM_MEMBERS, DEMO_USERS.manager, DEMO_USERS.admin];
 
 export const THRUST_AREAS = [
   "Product Excellence",
@@ -414,12 +418,21 @@ interface AppState {
   isAuthed: boolean;
   authSource: "none" | "account" | "sample";
   user: User | null;
+  people: User[];
   goals: Goal[];
   audit: AuditLog[];
   notifications: Notification[];
   escalations: Escalation[];
+  workspaceLoadedAt: string | null;
   login: (role: Role) => void;
   setAuthUser: (user: User) => void;
+  setWorkspaceData: (data: {
+    people: User[];
+    goals: Goal[];
+    audit: AuditLog[];
+    notifications: Notification[];
+    escalations: Escalation[];
+  }) => void;
   logout: () => void;
   switchRole: (role: Role) => void;
   upsertGoal: (g: Goal) => void;
@@ -436,14 +449,46 @@ export const useApp = create<AppState>()(
       isAuthed: false,
       authSource: "none",
       user: null,
+      people: DEMO_PEOPLE,
       goals: seedGoals(),
       audit: seedAudit(),
       notifications: seedNotifications(),
       escalations: seedEscalations(),
-      login: (role) => set({ isAuthed: true, authSource: "sample", user: DEMO_USERS[role] }),
-      setAuthUser: (user) => set({ isAuthed: true, authSource: "account", user }),
+      workspaceLoadedAt: null,
+      login: (role) =>
+        set({
+          isAuthed: true,
+          authSource: "sample",
+          user: DEMO_USERS[role],
+          people: DEMO_PEOPLE,
+          goals: seedGoals(),
+          audit: seedAudit(),
+          notifications: seedNotifications(),
+          escalations: seedEscalations(),
+          workspaceLoadedAt: null,
+        }),
+      setAuthUser: (user) =>
+        set((s) => ({
+          isAuthed: true,
+          authSource: "account",
+          user,
+          people: [user, ...s.people.filter((p) => p.id !== user.id && p.email !== user.email)],
+        })),
+      setWorkspaceData: (data) =>
+        set((s) => ({
+          people: data.people.length
+            ? data.people
+            : s.user
+              ? [s.user]
+              : [],
+          goals: data.goals,
+          audit: data.audit,
+          notifications: data.notifications,
+          escalations: data.escalations,
+          workspaceLoadedAt: now(),
+        })),
       logout: () => set({ isAuthed: false, authSource: "none", user: null }),
-      switchRole: (role) => set({ isAuthed: true, authSource: "sample", user: DEMO_USERS[role] }),
+      switchRole: (role) => set({ isAuthed: true, authSource: "sample", user: DEMO_USERS[role], people: DEMO_PEOPLE }),
       upsertGoal: (g) =>
         set((s) => {
           const idx = s.goals.findIndex((x) => x.id === g.id);
@@ -489,10 +534,12 @@ export const useApp = create<AppState>()(
         isAuthed: s.isAuthed,
         authSource: s.authSource,
         user: s.user,
+        people: s.people,
         goals: s.goals,
         audit: s.audit,
         notifications: s.notifications,
         escalations: s.escalations,
+        workspaceLoadedAt: s.workspaceLoadedAt,
       }),
     },
   ),
@@ -524,5 +571,5 @@ export const overallScore = (goals: Goal[]): number => {
 };
 
 export const userById = (id: string): User | undefined =>
-  TEAM_MEMBERS.find((u) => u.id === id) ??
-  Object.values(DEMO_USERS).find((u) => u.id === id);
+  useApp.getState().people.find((u) => u.id === id) ??
+  DEMO_PEOPLE.find((u) => u.id === id);

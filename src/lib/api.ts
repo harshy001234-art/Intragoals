@@ -61,6 +61,7 @@ const toAppUser = (user: BackendUser): User => {
   const role = roleMap[user.role];
   return {
     id: user.id,
+    managerId: user.managerId,
     name: user.name,
     email: user.email,
     role,
@@ -72,6 +73,8 @@ const toAppUser = (user: BackendUser): User => {
 
 const profileToAppUser = (profile: ProfileRow): User => ({
   id: profile.id,
+  organizationId: profile.organization_id,
+  managerId: profile.manager_id,
   name: profile.full_name || profile.email,
   email: profile.email,
   role: profile.role,
@@ -116,6 +119,13 @@ function normalizeAuthError(error: AuthError | null) {
 async function getOrCreateProfile(user: SupabaseAuthUser) {
   const client = requireSupabase();
   const fallback = fallbackUserFromSupabase(user);
+  const { data: bootstrapped } = await client.rpc("bootstrap_workspace", {
+    workspace_name: null,
+    workspace_domain: null,
+  });
+
+  if (bootstrapped) return profileToAppUser(bootstrapped as ProfileRow);
+
   const { data, error } = await client
     .from("profiles")
     .select("id, organization_id, email, full_name, role, department, title, manager_id, avatar_color, entra_object_id")

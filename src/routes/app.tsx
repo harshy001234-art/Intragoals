@@ -3,6 +3,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { Topbar } from "@/components/layout/Topbar";
 import { useApp } from "@/lib/store";
 import { authApi } from "@/lib/api";
+import { workspaceApi } from "@/lib/workspace-api";
 import { useEffect, useState } from "react";
 
 export const Route = createFileRoute("/app")({
@@ -14,7 +15,9 @@ export const Route = createFileRoute("/app")({
 
 function AppShell() {
   const isAuthed = useApp((s) => s.isAuthed);
+  const authSource = useApp((s) => s.authSource);
   const setAuthUser = useApp((s) => s.setAuthUser);
+  const setWorkspaceData = useApp((s) => s.setWorkspaceData);
   const navigate = useNavigate();
   const [checking, setChecking] = useState(!isAuthed);
 
@@ -22,10 +25,28 @@ function AppShell() {
     if (isAuthed) return;
     authApi
       .me()
-      .then(setAuthUser)
+      .then(async (user) => {
+        setAuthUser(user);
+        const workspace = await workspaceApi.loadWorkspace();
+        if (workspace) setWorkspaceData(workspace);
+      })
       .catch(() => navigate({ to: "/login" }))
       .finally(() => setChecking(false));
-  }, [isAuthed, navigate, setAuthUser]);
+  }, [isAuthed, navigate, setAuthUser, setWorkspaceData]);
+
+  useEffect(() => {
+    if (!isAuthed || authSource !== "account" || !workspaceApi.isReady()) return;
+    let cancelled = false;
+    workspaceApi
+      .loadWorkspace()
+      .then((workspace) => {
+        if (!cancelled && workspace) setWorkspaceData(workspace);
+      })
+      .catch((error) => console.warn("Unable to load Supabase workspace:", error));
+    return () => {
+      cancelled = true;
+    };
+  }, [authSource, isAuthed, setWorkspaceData]);
 
   if (!isAuthed && checking) return null;
   if (!isAuthed) return null;

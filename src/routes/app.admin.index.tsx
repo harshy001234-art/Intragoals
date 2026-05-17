@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useApp, scoreForGoal, TEAM_MEMBERS, userById } from "@/lib/store";
+import { useApp, scoreForGoal, userById } from "@/lib/store";
 import { KpiCard } from "@/components/common/Bits";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, PieChart, Pie, Cell } from "recharts";
 
@@ -9,6 +9,7 @@ export const Route = createFileRoute("/app/admin/")({
 
 function AdminDash() {
   const goals = useApp((s) => s.goals);
+  const people = useApp((s) => s.people);
   const escalations = useApp((s) => s.escalations);
   const audit = useApp((s) => s.audit);
 
@@ -16,13 +17,15 @@ function AdminDash() {
   const approved = goals.filter((g) => g.status === "Approved" || g.status === "Locked").length;
   const completion = Math.round((approved / Math.max(1, totalGoals)) * 100);
 
-  const deptData = [
-    { dept: "Product Eng", score: 78 },
-    { dept: "Sales", score: 82 },
-    { dept: "Marketing", score: 71 },
-    { dept: "HR", score: 88 },
-    { dept: "Finance", score: 74 },
-  ];
+  const departments = Array.from(new Set(people.map((person) => person.department))).filter(Boolean);
+  const deptData = departments.map((department) => {
+    const departmentUsers = people.filter((person) => person.department === department);
+    const departmentGoals = goals.filter((goal) => departmentUsers.some((person) => person.id === goal.ownerId));
+    const score = departmentGoals.length
+      ? Math.round(departmentGoals.reduce((sum, goal) => sum + scoreForGoal(goal), 0) / departmentGoals.length)
+      : 0;
+    return { dept: department.replace("Product Engineering", "Product Eng"), score };
+  });
   const statusData = [
     { name: "Approved", value: approved, color: "#19d88f" },
     { name: "Pending", value: goals.filter((g) => g.status === "Pending Approval").length, color: "#ffd43d" },

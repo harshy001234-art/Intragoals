@@ -155,6 +155,100 @@ create table if not exists public.integration_connections (
   unique(organization_id, provider)
 );
 
+create or replace function public.bootstrap_workspace(
+  workspace_name text default null,
+  workspace_domain text default null
+)
+returns public.profiles
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  user_email text;
+  user_meta jsonb;
+  resolved_domain text;
+  resolved_name text;
+  org_id uuid;
+  org_created boolean := false;
+  assigned_role public.app_role := 'employee';
+  profile public.profiles;
+begin
+  select email, raw_user_meta_data
+    into user_email, user_meta
+  from auth.users
+  where id = auth.uid();
+
+  if user_email is null then
+    raise exception 'Not authenticated';
+  end if;
+
+  resolved_domain := lower(coalesce(nullif(workspace_domain, ''), split_part(user_email, '@', 2), 'intragoals.local'));
+  resolved_name := coalesce(nullif(workspace_name, ''), initcap(split_part(resolved_domain, '.', 1)) || ' Workspace');
+
+  select id into org_id
+  from public.organizations
+  where domain = resolved_domain
+  limit 1;
+
+  if org_id is null then
+    insert into public.organizations (name, domain)
+    values (resolved_name, resolved_domain)
+    returning id into org_id;
+    org_created := true;
+  end if;
+
+  if org_created then
+    assigned_role := 'admin';
+  elsif user_meta->>'role' in ('employee', 'manager', 'admin') then
+    assigned_role := (user_meta->>'role')::public.app_role;
+  end if;
+
+  insert into public.profiles (
+    id,
+    organization_id,
+    email,
+    full_name,
+    role,
+    department,
+    title,
+    avatar_color
+  )
+  values (
+    auth.uid(),
+    org_id,
+    user_email,
+    coalesce(nullif(user_meta->>'full_name', ''), nullif(user_meta->>'name', ''), split_part(user_email, '@', 1)),
+    assigned_role,
+    coalesce(nullif(user_meta->>'department', ''), 'Intragoals'),
+    coalesce(nullif(user_meta->>'title', ''), case when assigned_role = 'admin' then 'Admin / HR' else 'Employee' end),
+    coalesce(nullif(user_meta->>'avatar_color', ''), case assigned_role when 'admin' then '#ff7a18' when 'manager' then '#8438ff' else '#00d8ff' end)
+  )
+  on conflict (id) do update set
+    organization_id = coalesce(public.profiles.organization_id, excluded.organization_id),
+    email = excluded.email,
+    full_name = coalesce(nullif(public.profiles.full_name, ''), excluded.full_name),
+    department = coalesce(public.profiles.department, excluded.department),
+    title = coalesce(public.profiles.title, excluded.title),
+    avatar_color = coalesce(public.profiles.avatar_color, excluded.avatar_color),
+    updated_at = now()
+  returning * into profile;
+
+  if org_created and profile.role <> 'admin' then
+    update public.profiles
+    set role = 'admin',
+        title = coalesce(title, 'Admin / HR'),
+        updated_at = now()
+    where id = auth.uid()
+    returning * into profile;
+  end if;
+
+  return profile;
+end;
+$$;
+
+grant execute on function public.bootstrap_workspace(text, text) to authenticated;
+
 create or replace function public.current_org_id()
 returns uuid
 language sql
@@ -296,8 +390,14 @@ with check (
 create policy "audit visible to admins" on public.audit_logs
 for select using (organization_id = public.current_org_id() and public.is_admin());
 
+create policy "org members create audit" on public.audit_logs
+for insert with check (organization_id = public.current_org_id());
+
 create policy "users see own notifications" on public.notifications
 for select using (user_id = auth.uid() or public.is_admin());
+
+create policy "org members create notifications" on public.notifications
+for insert with check (organization_id = public.current_org_id());
 
 create policy "users update own notifications" on public.notifications
 for update using (user_id = auth.uid()) with check (user_id = auth.uid());

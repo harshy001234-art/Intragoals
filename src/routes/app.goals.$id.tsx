@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/select";
 import { ArrowLeft, Save } from "lucide-react";
 import { toast } from "sonner";
+import { workspaceApi } from "@/lib/workspace-api";
 
 export const Route = createFileRoute("/app/goals/$id")({
   component: GoalDetail,
@@ -22,6 +23,7 @@ function GoalDetail() {
   const { id } = useParams({ from: "/app/goals/$id" });
   const goal = useApp((s) => s.goals.find((g) => g.id === id));
   const updateQuarter = useApp((s) => s.updateQuarter);
+  const authSource = useApp((s) => s.authSource);
   const user = useApp((s) => s.user)!;
   const pushAudit = useApp((s) => s.pushAudit);
 
@@ -120,9 +122,21 @@ function GoalDetail() {
                 <Button
                   size="sm"
                   onClick={() => {
-                    updateQuarter(goal.id, q.quarter, { submittedAt: new Date().toISOString() });
-                    pushAudit({ userId: user.id, userName: user.name, action: `Submitted ${q.quarter} check-in`, entityType: "QuarterlyUpdate", entityId: `${goal.id}:${q.quarter}`, newValue: String(q.achievement ?? "") });
-                    toast.success(`${q.quarter} check-in submitted.`);
+                    const submittedAt = new Date().toISOString();
+                    const next = { ...q, submittedAt };
+                    const auditEntry = { userId: user.id, userName: user.name, action: `Submitted ${q.quarter} check-in`, entityType: "QuarterlyUpdate", entityId: `${goal.id}:${q.quarter}`, newValue: String(q.achievement ?? "") };
+                    updateQuarter(goal.id, q.quarter, next);
+                    pushAudit(auditEntry);
+                    if (authSource === "account") {
+                      void Promise.all([
+                        workspaceApi.updateQuarter(goal.id, q.quarter, next),
+                        workspaceApi.createAudit(auditEntry),
+                      ])
+                        .then(() => toast.success(`${q.quarter} check-in submitted.`))
+                        .catch((error) => toast.error(error instanceof Error ? error.message : "Unable to sync check-in."));
+                    } else {
+                      toast.success(`${q.quarter} check-in submitted.`);
+                    }
                   }}
                 >
                   <Save className="mr-1.5 h-4 w-4" /> Submit {q.quarter}

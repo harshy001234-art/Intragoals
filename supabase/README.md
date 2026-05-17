@@ -34,7 +34,21 @@ For Microsoft Entra ID:
 - Basic Microsoft sign-in: enable the Azure provider in Supabase Auth.
 - Enterprise SSO: configure SAML SSO and use `authApi.signInWithSsoDomain(domain)`.
 
-## 4. Bonus Modules
+## 4. App Data Sync
+
+The frontend now uses Supabase for real account sessions and keeps local sample data for the collapsed "Explore sample workspace" flow.
+
+When `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are present:
+
+- Login/register/logout/password reset use Supabase Auth.
+- The first user for an email domain is bootstrapped into an organization as `admin`.
+- Later users on the same email domain are attached to the same organization.
+- App shell hydration loads `profiles`, `goals`, `quarterly_checkins`, `audit_logs`, `notifications`, and `escalation_events`.
+- Goal creation, approval decisions, editable approval fields, quarterly check-ins, audit events, and notification read state are written back to Supabase.
+
+Sample mode still stays fully local so demos work before Supabase is configured.
+
+## 5. Bonus Modules
 
 The schema already includes tables for:
 
@@ -43,4 +57,8 @@ The schema already includes tables for:
 - Rule-based escalations: `escalation_rules`, `escalation_events`
 - Analytics: `analytics_goal_distribution`, `analytics_manager_effectiveness`
 
-The next implementation pass should wire the app's goal/check-in/approval mutations to these tables.
+Recommended next integrations:
+
+- Add an Edge Function or scheduled job for escalation rule evaluation.
+- Add a service-role sync job for Microsoft Entra org hierarchy and group membership.
+- Add Teams/email delivery workers that create rows in `notifications` and send external messages.

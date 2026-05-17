@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ProgressRing } from "@/components/common/Bits";
 import { toast } from "sonner";
+import { workspaceApi } from "@/lib/workspace-api";
 
 export const Route = createFileRoute("/app/checkins")({
   component: CheckinsPage,
@@ -20,6 +21,7 @@ const QUARTERS: { q: Quarter; window: string }[] = [
 
 function CheckinsPage() {
   const user = useApp((s) => s.user)!;
+  const authSource = useApp((s) => s.authSource);
   const goals = useApp((s) => s.goals).filter((g) => g.ownerId === user.id && (g.status === "Approved" || g.status === "Locked"));
   const updateQuarter = useApp((s) => s.updateQuarter);
 
@@ -74,7 +76,25 @@ function CheckinsPage() {
                     </SelectContent>
                   </Select>
                   <Textarea rows={2} className="mt-2" placeholder="Comment" value={u.comment} onChange={(e) => updateQuarter(g.id, u.quarter, { comment: e.target.value })} />
-                  <Button size="sm" className="mt-2 w-full" onClick={() => toast.success(`${u.quarter} update saved.`)}>Save {u.quarter}</Button>
+                  <Button
+                    size="sm"
+                    className="mt-2 w-full"
+                    onClick={() => {
+                      const submittedAt = new Date().toISOString();
+                      const next = { ...u, submittedAt };
+                      updateQuarter(g.id, u.quarter, next);
+                      if (authSource === "account") {
+                        void workspaceApi
+                          .updateQuarter(g.id, u.quarter, next)
+                          .then(() => toast.success(`${u.quarter} update saved.`))
+                          .catch((error) => toast.error(error instanceof Error ? error.message : "Unable to sync check-in."));
+                      } else {
+                        toast.success(`${u.quarter} update saved.`);
+                      }
+                    }}
+                  >
+                    Save {u.quarter}
+                  </Button>
                 </div>
               ))}
             </div>
